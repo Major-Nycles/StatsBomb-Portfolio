@@ -1,0 +1,404 @@
+---
+title: "2019/20"
+author: "James Cronly"
+date: "25/10/2021"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+
+```{r}
+
+twenty20_2021 <- read.csv(file = "2020-2021.csv")
+twenty19_2020 <- read.csv(file = "2019-2020.csv")
+twenty18_2019 <- read.csv(file = "2018-2019.csv")
+twenty17_2018 <- read.csv(file = "2017-2018.csv")
+twenty16_2017 <- read.csv(file = "2016-2017.csv")
+
+```
+
+```{r}
+# 2020/2021 Liverpool
+
+liverpool_20_21 <- filter(twenty19_2020, HomeTeam == "Liverpool" | AwayTeam == "Liverpool")
+
+liverpool_20_21 <- select(liverpool_20_21, HomeTeam, AwayTeam, FTHG, FTAG)
+
+liverpool_20_21_home <- filter(liverpool_20_21, HomeTeam == "Liverpool")
+liverpool_20_21_away <- filter(liverpool_20_21, AwayTeam == "Liverpool")
+
+liverpool_20_21_home$Scored <- liverpool_20_21_home$FTHG
+liverpool_20_21_home$Conceded <- liverpool_20_21_home$FTAG
+
+liverpool_20_21_away$Scored <- liverpool_20_21_away$FTAG
+liverpool_20_21_away$Conceded <- liverpool_20_21_away$FTHG
+
+performance <- rbind(liverpool_20_21_home, liverpool_20_21_away)
+performance$differential <- performance$Scored - performance$Conceded
+performance$total <- performance$Scored + performance$Conceded
+
+goal_diff <- ggplot(data = performance) +
+        geom_histogram(mapping = aes(differential),
+                 colour = "steelblue",
+                 binwidth = 1,
+                 fill = "white") +
+        scale_x_continuous(breaks = seq(-5,7, by = 1)) +
+        scale_y_continuous(breaks = seq(0,10, by = 1))
+
+goal_diff
+
+total <- ggplot(data = performance) +
+        geom_histogram(mapping = aes(total),
+                 colour = "steelblue",
+                 binwidth = 1,
+                 fill = "white") +
+        scale_x_continuous(breaks = seq(-5,7, by = 1)) +
+        scale_y_continuous(breaks = seq(0,10, by = 1))
+
+total
+
+```
+```{r}
+# Insert Lockdown 
+
+twenty19_2020$Date <- as.Date(twenty19_2020$Date, "%d/%m/%Y")
+
+for(i in 1:nrow(twenty19_2020)) {
+        if(twenty19_2020$Date[i] < as.Date("2020-03-26")) {
+                twenty19_2020$Lockdown[i] <- 0
+        } else {
+                twenty19_2020$Lockdown[i] <- 1
+        }
+}
+```
+
+
+
+```{r}
+refined <- select(twenty19_2020, HomeTeam, AwayTeam, FTHG, FTAG, Lockdown)
+
+home <- select(refined, HomeTeam, AwayTeam, FTHG, Lockdown)
+away <- select(refined, AwayTeam, HomeTeam, FTAG, Lockdown)
+
+home$home <- 1
+away$home <- 0
+
+colnames(home) <- c("Team","Opponent","Goals","Lockdown","Home")
+colnames(away) <- c("Team","Opponent","Goals","Lockdown","Home")
+
+refined <- rbind(home,away)
+
+refined$Home <- as.factor(refined$Home)
+refined$Lockdown <- as.factor(refined$Lockdown)
+```
+
+```{r}
+library(caret)
+
+model_19_20 <- glm(Goals ~ Team + Opponent + Home + Lockdown,
+             family = poisson,
+             data = refined)
+
+for (i in 1:nrow(refined)) {
+        refined$exG[i] <- predict(model_19_20, newdata = refined[i,], type = "response")
+}
+
+# rpois(1, predict(model, newdata = test, type = "response"))
+```
+
+```{r}
+
+Seasons <- data.frame(Points = numeric(), GF = numeric(), GA = numeric(), 
+                      Place = numeric(),
+                      Winner = character())
+
+# Simulate a season
+
+
+for(i in 1:1000) {
+        Season <- refined
+        
+        for(j in 1:nrow(Season)) {
+                Season$Sim_HG[j] <- rpois(1, Season$exG[j])
+        }
+        
+        Season$Sim_AG <- Season$Sim_HG[381:760]
+        Season <- Season[1:380,]
+        
+       for (k in 1:nrow(Season)) {
+               if(Season$Sim_HG[k] > Season$Sim_AG[k]) {
+                       Season$Winner[k] <- Season$Team[k]
+               }
+               if(Season$Sim_HG[k] < Season$Sim_AG[k]) {
+                       Season$Winner[k] <- Season$Opponent[k]
+               }
+               if(Season$Sim_HG[k] == Season$Sim_AG[k]) {
+                       Season$Winner[k] <- "Draw"
+               }
+       }
+        
+        teams <- as.data.frame(unique(Season$Team))
+        teams$points <- rep(0,20)
+        teams$scored <- rep(0,20)
+        teams$conceded <- rep(0,20)
+        
+        for (m in 1:nrow(teams)) {
+                for (n in 1:nrow(Season)) {
+                        if(teams$`unique(Season$Team)`[m] == Season$Winner[n]) {
+                                teams$points[m] <- teams$points[m] + 3
+                        }
+                        if(teams$`unique(Season$Team)`[m] == Season$Team[n] |
+                           teams$`unique(Season$Team)`[m] == Season$Opponent[n]){
+                                if(Season$Winner[n] == "Draw") {
+                                        teams$points[m] <- teams$points[m] + 1
+                                }
+                        }
+                        if(teams$`unique(Season$Team)`[m] == Season$Team[n]) {
+                                teams$scored[m] <- teams$scored[m] +
+                                        Season$Sim_HG[n]
+                                teams$conceded[m] <- teams$conceded[m] +
+                                        Season$Sim_AG[n]
+                        }
+                        if(teams$`unique(Season$Team)`[m] == Season$Opponent[n]) {
+                                teams$scored[m] <- teams$scored[m] +
+                                        Season$Sim_AG[n]
+                                teams$conceded[m] <- teams$conceded[m] +
+                                        Season$Sim_HG[n]
+                        }
+                }
+        }
+        
+        teams <- arrange(teams, desc(points))
+        Points <- teams$points[teams$`unique(Season$Team)` == "Liverpool"]
+        GF <- teams$scored[teams$`unique(Season$Team)` == "Liverpool"]
+        GA <- teams$conceded[teams$`unique(Season$Team)` == "Liverpool"]
+        Place <- match("Liverpool",teams$`unique(Season$Team)`)
+        Winner <- teams$`unique(Season$Team)`[1]
+        
+        Individual <- data.frame(Points = Points, GF = GF, GA = GA, 
+                                 Place = Place, 
+                                 Winner = Winner)
+        colnames(Individual) <- colnames(Seasons)
+        
+        Seasons <- rbind(Seasons, Individual)
+}
+```
+
+```{r}
+Seasons$GD <- Seasons$GF - Seasons$GA
+Seasons <- mutate(Seasons, Champions = ifelse(Winner == "Liverpool", 
+                                                  1,
+                                                  0))
+
+Seasons <- mutate(Seasons, Top_4 = ifelse(Place <= 4, 
+                                                  1,
+                                                  0))
+
+
+Seasons <- mutate(Seasons, Europa = ifelse(Place <= 7 & Place >=5, 
+                                                  1,
+                                                  0))
+
+Seasons <- mutate(Seasons, No_Europe = ifelse(Place >7, 
+                                                  1,
+                                                  0))
+
+```
+
+
+```{r}
+# Histogram of Finishing Place
+
+Finishing_Place_Hist <- ggplot(Seasons) +
+        geom_histogram(aes(Place, ..density..),
+                       binwidth = 1,
+                       fill = "#C8102E",
+                       colour = "#F6EB61") +
+        scale_x_continuous(breaks = seq(1,15,1)) +
+        ylab("Probability")
+
+Finishing_Place_Hist
+
+# Histogram of Points
+
+Points_Hist <- ggplot(Seasons) +
+        geom_histogram(aes(Points, ..density..),
+                       binwidth = 3,
+                       fill = "#C8102E",
+                       colour = "#F6EB61") +
+        scale_x_continuous(breaks = seq(1,100,5)) +
+        ylab("Probability")
+
+Points_Hist
+
+Scored_Hist <- ggplot(Seasons) +
+        geom_histogram(aes(GF, ..density..),
+                       binwidth = 3,
+                       fill = "#C8102E",
+                       colour = "#F6EB61") +
+        scale_x_continuous(breaks = seq(1,100,5)) +
+        ylab("Probability")
+
+Scored_Hist
+
+Conceded_Hist <- ggplot(Seasons) +
+        geom_histogram(aes(GA, ..density..),
+                       binwidth = 3,
+                       fill = "#C8102E",
+                       colour = "#F6EB61") +
+        scale_x_continuous(breaks = seq(1,100,5)) +
+        ylab("Probability")
+
+Conceded_Hist
+
+GD_Hist <- ggplot(Seasons) +
+        geom_histogram(aes(GD, ..density..),
+                       binwidth = 3,
+                       fill = "#C8102E",
+                       colour = "#F6EB61") +
+        scale_x_continuous(breaks = seq(1,100,5)) +
+        ylab("Probability")
+
+GD_Hist
+```
+
+```{r}
+library(kableExtra)
+
+targets <- data_frame()
+
+Champions <- c("Champions",
+                sum(Seasons$Champions)/nrow(Seasons),
+                mean(Seasons$Points[Seasons$Champions == 1]),
+                sd(Seasons$Points[Seasons$Champions == 1]),
+                mean(Seasons$GF[Seasons$Champions == 1]),
+                sd(Seasons$GF[Seasons$Champions == 1]),
+                mean(Seasons$GA[Seasons$Champions == 1]),
+                sd(Seasons$GA[Seasons$Champions == 1]),
+                mean(Seasons$GD[Seasons$Champions == 1]),
+                sd(Seasons$GD[Seasons$Champions == 1]))
+
+Champions_League <- c("Champions League",
+                sum(Seasons$Top_4)/nrow(Seasons),
+                mean(Seasons$Points[Seasons$Top_4 == 1]),
+                sd(Seasons$Points[Seasons$Top_4 == 1]),
+                mean(Seasons$GF[Seasons$Top_4 == 1]),
+                sd(Seasons$GF[Seasons$Top_4 == 1]),
+                mean(Seasons$GA[Seasons$Top_4 == 1]),
+                sd(Seasons$GA[Seasons$Top_4 == 1]),
+                mean(Seasons$GD[Seasons$Top_4 == 1]),
+                sd(Seasons$GD[Seasons$Top_4 == 1]))
+
+Europa <- c("Europa League",
+                sum(Seasons$Europa)/nrow(Seasons),
+                mean(Seasons$Points[Seasons$Europa == 1]),
+                sd(Seasons$Points[Seasons$Europa == 1]),
+                mean(Seasons$GF[Seasons$Europa == 1]),
+                sd(Seasons$GF[Seasons$Europa == 1]),
+                mean(Seasons$GA[Seasons$Europa == 1]),
+                sd(Seasons$GA[Seasons$Europa == 1]),
+                mean(Seasons$GD[Seasons$Europa == 1]),
+                sd(Seasons$GD[Seasons$Europa == 1]))
+
+No_Europe <- c("No Europe",
+                sum(Seasons$No_Europe)/nrow(Seasons),
+                mean(Seasons$Points[Seasons$No_Europe == 1]),
+                sd(Seasons$Points[Seasons$No_Europe == 1]),
+                mean(Seasons$GF[Seasons$No_Europe == 1]),
+                sd(Seasons$GF[Seasons$No_Europe == 1]),
+                mean(Seasons$GA[Seasons$No_Europe == 1]),
+                sd(Seasons$GA[Seasons$No_Europe == 1]),
+                mean(Seasons$GD[Seasons$No_Europe == 1]),
+                sd(Seasons$GD[Seasons$No_Europe == 1]))
+
+
+targets <- rbind(targets, Champions, Champions_League, Europa, No_Europe)
+
+colnames(targets) <- c("Target",
+                       "Probability",
+                       "Mean Points",
+                       "SD Points",
+                       "Mean Scored",
+                       "SD Scored",
+                       "Mean Conceded",
+                       "SD Conceded",
+                       "Mean GD",
+                       "SD GD")
+
+targets[,2:10] <- lapply(targets[,2:10], as.numeric)
+
+final_table <- kbl(targets, digits = 2, caption = "Target Metrics - 2019/20") %>%
+        kable_classic(full_width = T,
+                      html_font = "Cambria")
+
+final_table
+```
+```{r}
+# Store Summary
+
+summ <- summary(model_19_20)
+
+home_19_20 <- c("Home 2019/20",
+                mean(performance$FTHG[1:19]),
+                sd(performance$FTHG[1:19]),
+                mean(performance$FTAG[1:19]),
+                sd(performance$FTAG[1:19]))
+
+away_19_20 <- c("Away 2019/20",
+                mean(performance$FTAG[20:38]),
+                sd(performance$FTAG[20:38]),
+                mean(performance$FTHG[20:38]),
+                sd(performance$FTHG[20:38]))
+
+rates <- as.data.frame(rbind(home_19_20, away_19_20), row.names = FALSE)
+
+rates$V2 <- as.numeric(rates$V2)
+rates$V3 <- as.numeric(rates$V3)
+rates$V4 <- as.numeric(rates$V4)
+rates$V5 <- as.numeric(rates$V5)
+
+agg <- c("Aggregate", mean(rates$V2),mean(rates$V3),mean(rates$V4),mean(rates$V5))
+
+rates <- rbind(rates,agg)
+
+colnames(rates) <- c("Home/Away",
+                     "Score Rate",
+                     "SD Score Rate", 
+                     "Concede Rate",
+                     "SD Concede Rate")
+
+rates$`Score Rate` <- as.numeric(rates$`Score Rate`)
+rates$`SD Score Rate` <- as.numeric(rates$`SD Score Rate`)
+rates$`Concede Rate`<- as.numeric(rates$`Concede Rate`)
+rates$`SD Concede Rate` <- as.numeric(rates$`SD Concede Rate`)
+
+performance_table <- kbl(rates, digits = 3, caption = "Performance Metrics - 2019/20") %>%
+        kable_classic(full_width = F,
+                      html_font = "Cambria")
+
+performance_table
+```
+
+
+
+# Summary
+
+This report attempts to predict the final position of Liverpool FC for the upcoming season (2021/22). The probability of the team finishing in the following categories is quantified: Champions, Champions League (Top 4), Europa League (5-7) and No European Football (Lower than 7th).
+
+Predicting future performance based on the team data for the last two years is complicated by two major factors. The first is the onset of the Covid 19 pandemic, which resulted in the closure of Football stadia to the general public towards the end of the 2019/20 season. This effectively reduced home advantage, as will be discussed in the data. The second is the absence of Virgil Van Dijk for the majority of the 2020/21 season, which had an adverse effect on defensive metrics for that season.
+
+# Pre-Pandemic Performance (2019/20)
+
+The 2019/20 season saw Liverpool FC win the title for the first time in thirty years. Unfortunately, the final 9 games of the season had to be played behind closed doors due to onset of the Covid 19 pandemic. While this report does not attempt to re-evaluate the 2019/20 and 2020/21 season performances on their own merits, such factors are necessary to take into account when predicting future performance and the return of crowds to stadia.
+
+
+
+
+
+
+
+

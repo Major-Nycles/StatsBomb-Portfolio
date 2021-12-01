@@ -1,0 +1,115 @@
+---
+output: pdf_document
+---
+\setcounter{page}{4}
+
+# Metadata Analysis and Target Identification
+
+The six analysts assigned to recruiting for this position have conducted their own investigation and have presented a single candidate for consideration. Each analyst has then taken the player selected by their colleague and has then tested them using the metric by which they chose their own player. After assessing how each player performs or scores, that analyst then assigns a rank order to each candidate, excluding their own player. The rank from each analyst has then been collated into a decision matrix as shoen in Table 4.1.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+row_names <- c("Carlos",
+                  "de Vrij",
+                  "Kolarov",
+                  "Koulibaly",
+                  "Sabaly",
+                  "Sule")
+
+column_names <- c("Daniel",
+               "Jerker",
+               "James",
+               "Piotr",
+               "Ziaul",
+               "Yen")
+
+df <- matrix(nrow = 6, ncol = 6)
+
+df <- as.data.frame(df, row.names = row_names, col.names = column_names)
+
+colnames(df) <- column_names
+
+daniel <- as.numeric(c(2,NA,3,5,4,1))
+jerker <- as.numeric(c(4,1,NA,3,2,5))
+james <- as.numeric(c(1,2,5,NA,4,3))
+piotr <- as.numeric(c(5,1,4,3,NA,2))
+ziaul <- as.numeric(c(2,5,3,4,1,NA))
+yen <- as.numeric(c(NA,4,1,5,3,2))
+
+df[,1] <- daniel
+df[,2] <- jerker
+df[,3] <- james
+df[,4] <- piotr
+df[,5] <- ziaul
+df[,6] <- yen
+
+df$Total_Score <- rowSums(df, na.rm = TRUE)
+df$Mean_Score <- rowMeans(df[,1:6], na.rm = TRUE)
+df$Median <- c(2,2,3,4,3,2)
+
+df$names <- rownames(df)
+
+library(kableExtra)
+
+tablex <- df[,1:6] %>%
+        kbl(caption = "Table 4.1 - Analyst Rankings for Potential Recruits") %>%
+        kable_classic_2(html_font = "Cambria") %>%
+        kable_styling(full_width = F, latex_options = "HOLD_position")
+        
+```
+
+```{r fig.height=1, fig.width=1, message=FALSE, warning=FALSE, include=FALSE}
+
+analyst_cor <- cor(df[,1:6], method = "spearman", use = "pairwise.complete.obs")
+
+correl <- ggcorrplot::ggcorrplot(analyst_cor, method = "circle", 
+                       colors = c("#C8102E","#F6EB61"), title = "Fig 4.1 - Correlation", lab = TRUE)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(ggpubr)
+multi <- ggarrange(tablex,correl,nrow = 1, ncol = 2)
+multi
+```
+
+
+A Spearman Rank Correlation comparison was made between all of the analysts choices and can be seen in Figure 4.1 There is not particularly strong agreement between each anlyst when it comes to ranking the players. 
+
+There is, however a consensus with regard to the preferred player. Figure 4.2a shows the total score for each player taken from the decision matrix in Table 1. Koulibaly has the highest score, having obtained 80% of potential votes (25), followed by Kolarov on 64%.
+
+The median score given for each player is shown in Figure 4.2b. Even though there is little agreement between candidate rankings, Koulibaly has a higher median score than any other player, followed by Kolarov and Sabaly.
+
+The conclusion of this recruitment assignment is to recommend the acquisition of Kalidou Koulibaly from SSC Napoli as a potential upgrade to Dejan Lovren. Although an elite performer, Aleksandar Kolarov is not recommended as a potential candidate due to his age, while Youssouf Sabaly may be a candidate to further monitor.
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+graph <- ggplot(data = df, aes(x = names, y = Total_Score)) +
+        geom_bar(stat = "identity",
+                 fill = "#C8102E") +
+        theme_classic() +
+        xlab("Player") +
+        ylab("Total Score") +
+        theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+        ggtitle("Fig. 4.2a - Total Score")
+
+
+graph
+
+graph2 <- ggplot(data = df, aes(x = names, y = Median)) +
+        geom_bar(stat = "identity",
+                 fill = "#F6EB61") +
+        theme_classic() +
+        xlab("Player") +
+        ylab("Median Score") +
+        theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+        ggtitle("Fig. 4.2b - Median Score")
+        
+
+graph2
+```
+
+```{r echo=FALSE, fig.height=2.5, message=FALSE, warning=FALSE}
+ggarrange(graph, graph2, nrow = 1, ncol = 2)
+```
+

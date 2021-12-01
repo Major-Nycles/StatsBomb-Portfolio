@@ -1,0 +1,167 @@
+---
+title: "Dist"
+author: "James Cronly"
+date: "28/10/2021"
+output: html_document
+---
+
+```{r, fig.height= 3, fig.width= 5}
+library(ggplot2)
+
+points_C <- c(80.83, 4.18)
+points_CL <- c(74.20,5.28)
+
+set.seed(1234)
+
+a <- as.data.frame(rnorm(1000, points_C[1], points_C[2]))
+b <- as.data.frame(rnorm(1000, points_CL[1], points_CL[2]))
+
+a$Position <- "Champions"
+b$Position <- "Champions League"
+
+colnames(a) <- c("Points", "Position")
+colnames(b) <- c("Points", "Position")
+
+ab <- as.data.frame(rbind(a,b))
+
+graph_1 <- ggplot(data = ab) +
+        geom_density(aes(x = Points, color = Position)) +
+        geom_vline(xintercept = 76.8, 
+                   linetype = "dashed", 
+                   alpha = 0.5) +
+        theme_bw() +
+        xlab("Total Points") +
+        ylab("Density") +
+        ggtitle(label = "Target Points - 2021/22") 
+        
+png(filename="graph1.png", width = 1000, height = 500)
+graph_1
+dev.off()
+
+
+
+```
+```{r}
+scored_C <- c(76.03, 6.95)
+scored_CL <- c(71.77,7.79)
+
+set.seed(1234)
+
+c <- as.data.frame(rnorm(1000,scored_C[1], scored_C[2]))
+d <- as.data.frame(rnorm(1000, scored_CL[1], scored_CL[2]))
+
+c$Position <- "Champions"
+d$Position <- "Champions League"
+
+colnames(c) <- c("Scored", "Position")
+colnames(d) <- c("Scored", "Position")
+
+cd <- as.data.frame(rbind(c,d))
+
+graph_2 <- ggplot(data = cd) +
+        geom_density(aes(x = Scored, color = Position)) +
+        geom_vline(xintercept = 72.5, 
+                   linetype = "dashed", 
+                   alpha = 0.5) +
+        theme_bw() +
+        xlab("Total Scored") +
+        ylab("Density") +
+        ggtitle(label = "Target Scored - 2021/22") 
+        
+png(filename="graph2.png", width = 1000, height = 500)
+graph_2
+dev.off()
+
+
+```
+```{r}
+concede_C <- c(37.11, 5.69)
+concede_CL <- c(39.99,5.82)
+
+set.seed(1234)
+
+e <- as.data.frame(rnorm(1000,concede_C[1], concede_C[2]))
+f <- as.data.frame(rnorm(1000, concede_CL[1], concede_CL[2]))
+
+e$Position <- "Champions"
+f$Position <- "Champions League"
+
+colnames(e) <- c("Conceded", "Position")
+colnames(f) <- c("Conceded", "Position")
+
+ef <- as.data.frame(rbind(e,f))
+
+graph_3 <- ggplot(data = ef) +
+        geom_density(aes(x = Conceded, color = Position)) +
+        geom_vline(xintercept = 38.5, 
+                   linetype = "dashed", 
+                   alpha = 0.5) +
+        theme_bw() +
+        xlab("Total Conceded") +
+        ylab("Density") +
+        ggtitle(label = "Target Conceded - 2021/22") 
+        
+png(filename="graph3.png", width = 1000, height = 500)
+graph_3
+dev.off()
+
+
+```
+
+```{r}
+gd_C <- c(38.92, 6.84)
+gd_CL <- c(31.78, 8.48)
+
+set.seed(1234)
+
+h <- as.data.frame(rnorm(1000,gd_C[1], gd_C[2]))
+i <- as.data.frame(rnorm(1000, gd_CL[1], gd_CL[2]))
+
+h$Position <- "Champions"
+i$Position <- "Champions League"
+
+colnames(h) <- c("GD", "Position")
+colnames(i) <- c("GD", "Position")
+
+hi <- as.data.frame(rbind(h,i))
+
+graph_4 <- ggplot(data = hi) +
+        geom_density(aes(x = GD, color = Position)) +
+        geom_vline(xintercept = 33.75, 
+                   linetype = "dashed", 
+                   alpha = 0.5) +
+        theme_bw() +
+        xlab("Goal Difference") +
+        ylab("Probability") +
+        ggtitle(label = "Target Goal Difference - 2021/22") 
+        
+
+png(filename="graph4.png", width = 1000, height = 500)
+graph_4
+dev.off()
+
+```
+
+```{r}
+# Target table
+
+points_2021 <- c(72.5, 1.91, 76.8, 2.02)
+score_2021 <- c(62.1, 1.63, 72.5, 1.91)
+concede_2021 <- c(48.5, 1.28, 38.5, 1.01)
+
+perf_targ <- rbind(points_2021,score_2021,concede_2021)
+
+perf_targ <- as.data.frame(perf_targ)
+
+colnames(perf_targ) <- c("Minimum","Minimum Rate","Ideal","Ideal Rate")
+rownames(perf_targ) <- c("Points", "Score","Concede")
+
+library(kableExtra)
+
+perf_targ %>%
+        kbl(caption = "Performace Targets 2021/22") %>%
+        kable_classic(full_width = F) %>%
+        column_spec(5, bold = T)
+```
+
+

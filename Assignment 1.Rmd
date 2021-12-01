@@ -1,0 +1,297 @@
+---
+title: "Luka Modric Passes vs England (World Cup 2018)"
+output: pdf_document
+author: James Cronly
+date: "September 2021"
+geometry: margin = 2cm
+---
+
+```{r include=FALSE}
+library(rjson)
+library(dplyr)
+
+competitions <- fromJSON(file="./SoccermaticsForPython-master/Statsbomb/data/competitions.json")
+
+competitions.df <- data.frame(do.call(rbind,competitions),stringsAsFactors = FALSE)
+
+matches <- fromJSON(file="./SoccermaticsForPython-master/Statsbomb/data/matches/43/3.json")
+
+matches.df <- data.frame(do.call(rbind,matches),stringsAsFactors = FALSE)
+
+events <- fromJSON(file="./SoccermaticsForPython-master/Statsbomb/data/events/8656.json")
+
+events.df <- data.frame(do.call(rbind,events),stringsAsFactors = FALSE)
+
+rm(competitions, events, matches)
+```
+
+```{r include=FALSE}
+modric_events <- events.df[1,]
+
+for (i in 1:nrow(events.df)) {
+        if(events.df$player[[i]][1] == "5463") {
+                modric_events <- rbind(modric_events, events.df[i,])
+        }
+}
+
+for (i in 1:nrow(modric_events)) {
+        modric_events$type2[i] <- modric_events$type[[i]][2]
+}
+
+modric_events$type2 <- as.character(modric_events$type2)
+modric_passes <- filter(modric_events, type2 == "Pass")
+modric_carries <- filter(modric_events, type2 == "Carry")
+
+modric_summary <- as.data.frame(table(modric_events$type2))
+
+modric_events <- modric_events[-1]
+```
+
+```{r include=FALSE}
+# Analyse success rate of passes
+
+modric_pass_outcomes <- data.frame()
+
+for (i in 1:nrow(modric_passes)) {
+        index <- as.numeric(modric_passes$index[i])
+        outcome <- as.numeric(events.df$index[index + 1])
+        
+        temp_event <- filter(events.df, index == outcome)
+        
+        if(temp_event$type[[1]][2] == "Pressure") {
+                outcome <- outcome + 1
+                temp_event <- filter(events.df, index == outcome)
+        }
+        
+        modric_pass_outcomes <- rbind(modric_pass_outcomes, temp_event)
+        
+        if(temp_event$type[[1]][2] == "Clearance" | 
+           temp_event$type[[1]][2] == "Block") {
+                modric_passes$pass_outcome[i] <- "fail"
+        } else {modric_passes$pass_outcome[i] <- "unknown"}
+        
+        if(!is.na(temp_event$under_pressure[[1]][[1]][2])) {
+                if(temp_event$under_pressure[[1]][[1]][2] == "Incomplete") {
+                        modric_passes$pass_outcome[i] <- "fail"
+                }
+        } else {modric_passes$pass_outcome[i] <- "success"}
+        
+        modric_passes$end_location[i] <- temp_event$location
+}
+
+modric_pass_first_half <- filter(modric_passes, period == "1")
+modric_pass_second_half <- filter(modric_passes, period == "2")
+
+rm(temp_event)
+
+modric_pass_first_half$pass_outcome[23] <- "fail"
+```
+
+```{r include=FALSE}
+pass_percentage <- 100* sum(modric_passes$pass_outcome == "success")/nrow(modric_passes)
+```
+
+```{r include=FALSE}
+# First Half Passes
+
+x1 <- lapply(modric_pass_first_half$location, "[", 1)
+y1 <- lapply(modric_pass_first_half$location, "[", 2)
+x2 <- lapply(modric_pass_first_half$end_location , "[", 1)
+y2 <- lapply(modric_pass_first_half$end_location , "[", 2)
+
+my_list <- list(x1,y1,x2,y2)
+
+passes_loc <- data.frame(do.call(cbind, my_list))
+colnames(passes_loc) <- c("x1","y1","x2","y2")
+
+first_half_passes <- data.frame()
+
+for(i in 1:nrow(passes_loc)) {
+        for(j in 1:ncol(passes_loc)) {
+                first_half_passes[i,j] <- passes_loc[[i,j]][1]
+        }
+}
+colnames(first_half_passes) <- c("x1","y1","x2","y2")
+
+rm(x1,y1,x2,y2,my_list,passes_loc)
+
+first_half_passes$success <- modric_pass_first_half$pass_outcome
+```
+
+```{r include=FALSE}
+# First Half Pass Map
+
+# install.packages("ggsoccer")
+
+library(ggplot2)
+library("ggsoccer")
+
+Figure_1 <- ggplot(first_half_passes[-23,]) +
+        annotate_pitch(fill = "steelblue4", colour = "black", dimensions = pitch_statsbomb) +
+        theme_pitch() +
+        direction_label(x_label = 60, colour = "white") +
+        theme(panel.background = element_rect(fill = "steelblue4")) +
+        geom_segment(aes(x = x1, y = y1, 
+                         xend = x2, yend = y2, colour = success),
+                     arrow = arrow(length = unit(0.25, "cm"),
+                                   type = "closed")) +
+        scale_y_reverse() +
+        labs(caption = "Figure 1- Luka Modric First Half Passes")
+```
+
+```{r include=FALSE}
+# Second Half Passes
+
+x1 <- lapply(modric_pass_second_half$location, "[", 1)
+y1 <- lapply(modric_pass_second_half$location, "[", 2)
+x2 <- lapply(modric_pass_second_half$end_location , "[", 1)
+y2 <- lapply(modric_pass_second_half$end_location , "[", 2)
+
+my_list <- list(x1,y1,x2,y2)
+
+passes_loc <- data.frame(do.call(cbind, my_list))
+colnames(passes_loc) <- c("x1","y1","x2","y2")
+
+second_half_passes <- data.frame()
+
+for(i in 1:nrow(passes_loc)) {
+        for(j in 1:ncol(passes_loc)) {
+                second_half_passes[i,j] <- passes_loc[[i,j]][1]
+        }
+}
+colnames(second_half_passes) <- c("x1","y1","x2","y2")
+
+rm(x1,y1,x2,y2,my_list,passes_loc)
+
+second_half_passes$success <- modric_pass_second_half$pass_outcome
+```
+
+```{r include=FALSE}
+#Second Half Pass Map
+
+Figure_2 <- ggplot(second_half_passes[-10,]) +
+        annotate_pitch(fill = "steelblue4", colour = "black", dimensions = pitch_statsbomb) +
+        theme_pitch() +
+        direction_label(x_label = 60, colour = "white") +
+        theme(panel.background = element_rect(fill = "steelblue4")) +
+        geom_segment(aes(x = x1, y = y1, 
+                         xend = x2, yend = y2, colour = success),
+                     arrow = arrow(length = unit(0.25, "cm"),
+                                   type = "closed")) +
+        scale_x_reverse() +
+        labs(caption = "Figure 2 - Luka Modric Second Half Passes")
+```
+
+```{r include=FALSE}
+# Pass Progression Analysis 1st Half
+
+first_half_passes$progression <- first_half_passes$x2 - first_half_passes$x1
+first_half_mean_progression <- mean(first_half_passes$progression[-23])
+first_half_passes$pass_length <- sqrt((first_half_passes$x2 - first_half_passes$x1)^2 + (first_half_passes$y2 - first_half_passes$y1)^2)
+first_half_mean_pass_length <- mean(first_half_passes$pass_length[-23])
+first_half_total_progression <- sum(first_half_passes$progression[-23])
+first_half_total_pass_length <- sum(first_half_passes$pass_length[-23])
+first_half_success <- sum(first_half_passes$success[-23] == "success")/nrow(first_half_passes)
+first_half_passes$pass_angle <- atan((first_half_passes$x2 - first_half_passes$x1)/(first_half_passes$y2 - first_half_passes$y1)) *180/pi
+
+
+graph1.data <- first_half_passes[-23,]
+ggplot(data = graph1.data) +
+        geom_histogram(breaks = seq(-30,50,5),
+                       aes(progression),
+                       bins = 10,
+                       col = I("White"),,
+                       fill = I("steelblue4"),
+                       alpha = 0.4) +
+        geom_vline(aes(xintercept = first_half_mean_progression), 
+                   colour = "steelblue4") +
+        labs(x = "Distance [yards]", y = "Count", title = "Fig. 2a) - Ball Progression Histogram - First Half") +
+        ylim(0,8)
+
+# Pass Progression Analysis in 2nd Half
+
+second_half_passes$progression <- (second_half_passes$x2 - second_half_passes$x1)
+second_half_mean_progression <- mean(second_half_passes$progression[-10])
+second_half_passes$pass_length <- sqrt((second_half_passes$x2 - second_half_passes$x1)^2 + (second_half_passes$y2 - second_half_passes$y1)^2)
+second_half_mean_pass_length <- mean(second_half_passes$pass_length[-10])
+second_half_total_progression <- sum(second_half_passes$progression[-10])
+second_half_total_pass_length <- sum(second_half_passes$pass_length)
+second_half_success <- sum(second_half_passes$success[-10] == "success")/nrow(second_half_passes)
+second_half_passes$pass_angle <- atan((second_half_passes$x2 - second_half_passes$x1)/(second_half_passes$y2 - second_half_passes$y1)) *180/pi
+
+
+
+
+graph2.data <- second_half_passes[-10,]
+ggplot(data = graph2.data, aes(progression)) +
+        geom_histogram(breaks = seq(-30,50,5),
+                       bins = 10,
+                       col = I("white"),
+                       fill = I("steelblue4"),
+                       alpha = 0.3) +
+        geom_vline(aes(xintercept = second_half_mean_progression), 
+                   colour = "steelblue4") +
+        labs(x = "Distance [yards]", y = "Count", title = "Fig. 2b) - Ball Progression Histogram - Second Half") +
+        ylim(0,8)
+
+```
+
+```{r include=FALSE}
+# PAss Statistics Table
+
+library(kableExtra)
+
+first_half <- c(nrow(first_half_passes), first_half_mean_pass_length, first_half_mean_progression,
+                first_half_total_pass_length, first_half_total_progression,  first_half_success)
+
+second_half <- c(nrow(second_half_passes), second_half_mean_pass_length, second_half_mean_progression,
+                second_half_total_pass_length, second_half_total_progression, second_half_success)
+
+table <- rbind(first_half, second_half)
+colnames(table) <- c("No. of Passes", "Mean Pass Length", "Mean Pass Progression",
+                      "Total Pass Length","Total Pass Progression", "Success Rate")
+rownames(table) <- c("First Half",
+                     "Second Half")
+
+table <- signif(table, 3)
+
+table_report <- table %>%
+        kbl(caption = "Luka Modric Pass Statistics", align = "c") %>%
+        kable_classic(full_width = F, html_font = "Cambria") %>%
+        kable_styling(row_label_position = "c",
+                      latex_options = "HOLD_position",
+                      full_width = TRUE)
+```
+
+# Summary
+Luka Modric received numerous accolades for his performances during 2018, including the Golden Ball award for best player at the World Cup in Russia. Croatia's semi-final win against England was their final victory in the tournament. This report analyses the passing contribution of Luka Modric in this game and compares key passing metrics over both halves, and find distinct differences in the number and type of passes played. While this game eventually went into extra time, only first and second half actions have been included for the purposes of this report.
+
+# Data Processing
+The data used to generate this report was obtained from publicly available StatsBomb event data. The total events data was filtered to include actions performed by Luka Modric alone. This data was further refined to only include Pass actions. The outcome of each pass was determined by analysing the subsequent action recorded. In the case of a Pressure action, the next subsequent action was anlalysed until a Ball Receipt, Clearance or Block was recorded. A Ball Receipt  marked as unsuccessful, a Clearance or a Block were marked as failed passes. All other pass events not fulfilling these criteria were considered successful.
+
+# First Half
+All passes made by Luka Modric in the first half are shown in Figure 1.
+
+```{r echo=FALSE, fig.align="center", fig.height=3}
+plot(Figure_1)
+```
+Luka Modric is regularly described as an elite play-maker operating in forward positions. In the first half, of 24 passes, only 6 were made from within Croatia's half. His passing distribution is variable, but features successful attempts at using long balls from the right of centre out to the left wing in an attempt to widen the play. Only two passes are made into the opposition box, including one from a corner.
+
+\newpage
+# Second Half
+All passes made by Luka Modric in the second half are shown in Figure 2.
+
+```{r echo=FALSE, fig.align= "center", fig.height=3}
+Figure_2
+```
+The type of pass and position from which they are played changes significantly in the second half. Modric continues to distribute a similar range of passing, including searching balls out to the left, but operates closer to the touchline on the right wing and in more advanced positions. Of 41 passes, only one is made into the opposition area, resulting in an unsuccessful pass. In contrast to the first half, 41.5% of his passes now occur within his own half.
+
+# Statistical Comparison
+Table 1 shows a breakdown of key statistical metrics of Luka Modric's passes for each half.
+```{r echo=FALSE, fig.align= "center"}
+table_report
+```
+Statistical analysis of the passes confirms a distinct difference in Modric's pass performance per half. His frequency of passing increases by approximately 71% and also features passes that are on average 23.7% shorter than the length of those in the first half. His passing accuracy also increases by 15.2%, perhaps attributable to attempting easier passes over a shorter distance. If we define a pass progression as the degree to which a pass moves the play further up the field, his mean progressive pass length more than halves in the second half. Although his sum of positive pass progression reduces by around 22.2%, his total pass length increases by 52% due to a larger number of passes, albeit at a shorter distance.
+
+# Conclusion
+Analysis of Luka Modric's passing performance for this game shows a distinct change in the passing style per half. Both demonstrate the role of the Advanced Play-maker; predominantly operating in the opposition and half and facilitating play further up the field without directly contributing to goal-scoring opportunities within the penalty area. In the first half, Modric attempted more progressive passing, but with a comparatively poor level of accuracy. The second half saw a switch to a higher frequency of passing over a shorter range, potentially tiring the opposition by causing them to chase the ball more due to it traveling a longer total pass length in the second half. 

@@ -1,0 +1,152 @@
+---
+title: "Player Scouting"
+author: "James Cronly"
+date: "16/09/2021"
+output: pdf_document
+---
+
+```{r}
+# Load the required packages. As this code is being written in R and not the 
+# default Python as used in the course, explanations of each package used and justification for doing so is included here.
+
+# Package used for handling rjson files.
+library(rjson)
+# Package used for data pre-processing. Equivalent of Pandas for Python.
+library(dplyr)
+# Regression and ML package. Equivalent of scikit-learn or PyCaret for Python.
+library(caret)
+# Graphing/visualisation package. Equivalent of matplotlib for Python.
+library(ggplot2)
+# Football pitch visualisation package.
+library(ggsoccer)
+# Package for converting events data to SPADL format. Equivalent of 
+# socceraction in Python
+library(Rteta)
+
+# Import the Wyscout Data
+england <- fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/events/events_England.json")
+france <- fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/events/events_France.json")
+germany <- fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/events/events_Germany.json")
+italy <- fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/events/events_Italy.json")
+spain <- fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/events/events_Spain.json")
+```
+
+```{r}
+players <- data.frame(do.call(rbind,fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/players.json")),stringsAsFactors = FALSE)
+teams <- data.frame(do.call(rbind,fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/teams.json")),stringsAsFactors = FALSE)
+
+england.matches <- data.frame(do.call(rbind,fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/matches/matches_England.json")),stringsAsFactors = FALSE)
+france.matches <- data.frame(do.call(rbind,fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/matches/matches_France.json")),stringsAsFactors = FALSE)
+germany.matches <- data.frame(do.call(rbind,fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/matches/matches_Germany.json")),stringsAsFactors = FALSE)
+italy.matches <- data.frame(do.call(rbind,fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/matches/matches_Italy.json")),stringsAsFactors = FALSE)
+spain.matches <- data.frame(do.call(rbind,fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/matches/matches_Spain.json")),stringsAsFactors = FALSE)
+
+matches <- rbind(england.matches,france.matches,germany.matches,italy.matches,
+                 spain.matches)
+competitions <- data.frame(do.call(rbind,fromJSON(file="/Users/jamescronly/datasciencecoursera/Player Scouting/competitions.json")),stringsAsFactors = FALSE)
+```
+
+```{r}
+england.events <- data.frame(do.call(rbind,england),stringsAsFactors = FALSE)
+france.events <- data.frame(do.call(rbind,france),stringsAsFactors = FALSE)
+germany.events <- data.frame(do.call(rbind,germany),stringsAsFactors = FALSE)
+italy.events <- data.frame(do.call(rbind,italy),stringsAsFactors = FALSE)
+spain.events <- data.frame(do.call(rbind,spain),stringsAsFactors = FALSE)
+
+all.events <- rbind(england.events,france.events,germany.events,italy.events,
+                    spain.events)
+```
+
+```{r}
+# Filter players down to defenders.
+defenders <- players[FALSE,]
+
+for (i in 1:length(players$passportArea)) {
+        if(players[[9]][[i]][1] == "DF") {
+                defenders <- rbind(defenders, players[i,])
+        }
+}
+
+# Filter events down to only those performed by defenders
+defenders$wyId <- as.numeric(defenders$wyId)
+all.events$playerId <- as.numeric(all.events$playerId)
+
+defender.events <- filter(all.events, playerId %in% defenders$wyId)
+```
+
+```{r}
+# Sort events by player
+sorted.defender.events <- arrange(defender.events, playerId)
+sorted.defender.events$subEventName <- as.character(sorted.defender.events$subEventName)
+
+unique.actions <- as.data.frame(table(sorted.defender.events$subEventName))
+
+simple.passes <- filter(sorted.defender.events, subEventName == "Shot")
+```
+
+```{r}
+# Only select actions of interest
+
+actions.of.interest <- c("Air duel",
+                         "Clearance",
+                         "Foul",
+                         "Ground attacking duel",
+                         "Ground defending duel",
+                         "Ground loose ball duel",
+                         "Hand Foul",
+                         "Head Pass",
+                         "High Pass",
+                         "Launch",
+                         "Out of game foul",
+                         "Protest",
+                         "Simple pass",
+                         "Throw in",
+                         "Time lost foul",
+                         "Touch",
+                         "Violent Foul")
+
+defender.events.of.interest <- filter(defender.events, subEventName %in% actions.of.interest)
+
+# Manually transform to SPADL events
+
+SPADL <- data.frame(matrix(ncol = 12, nrow = 949216))
+colnames(SPADL) <- c("game_id","period_id","seconds","team","player","start_x",
+                     "start_y","end_x","end_y","actiontype","result","bodypart")
+
+SPADL$game_id <- as.character(defender.events.of.interest$subEventName)
+SPADL$period_id <- as.character(defender.events.of.interest$matchPeriod)
+SPADL <- SPADL %>% mutate(period_id = ifelse(period_id == "1H",1,2))
+SPADL$seconds <- as.numeric(defender.events.of.interest$eventSec)
+SPADL$team <- as.numeric(defender.events.of.interest$teamId)
+SPADL$player <- as.character(defender.events.of.interest$playerId)
+
+for (i in 1:length(SPADL$game_id)) {
+        SPADL$start_y[i] <- 
+                as.numeric(defender.events.of.interest[[5]][[i]][[1]][1])
+        # SPADL$start_x[i] <- 
+        #         as.numeric(defender.events.of.interest[[5]][[i]][[1]][2])
+        # 
+        # SPADL$end_y[i] <- 
+        #         as.numeric(defender.events.of.interest[[5]][[i]][[2]][1])
+        # SPADL$end_x[i] <- 
+        #         as.numeric(defender.events.of.interest[[5]][[i]][[2]][2])
+}
+
+SPADL$actiontype <- as.character(defender.events.of.interest$subEventName)
+```
+
+```{r}
+# Determine Success or Failure of Each Action
+
+for (1 in 1:length(defender.events.of.interest$eventId)) {
+        
+        if(defender.events.of.interest$subEventName[i] == "Air Duel") {
+                
+        }
+}
+```
+
+
+
+
+
